@@ -1,0 +1,102 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bank-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bankdb}
+      POSTGRES_USER: ${POSTGRES_USER:-bankuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bankpassword}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bankuser} -d ${POSTGRES_DB:-bankdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - bank-network
+
+  backend:
+    build:
+      context: ./backend/BankApi
+      dockerfile: Dockerfile
+    container_name: bank-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=postgres;Database=${POSTGRES_DB:-bankdb};Username=${POSTGRES_USER:-bankuser};Password=${POSTGRES_PASSWORD:-bankpassword}"
+      FrontendOrigin: "http://localhost:3000"
+      Jwt__Key: ${JWT_KEY:-dev-secret-key-change-me-in-production-please}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      Odoo__Url: ${ODOO_URL:-http://odoo:8069}
+      Odoo__Database: ${ODOO_DATABASE:-bankportal}
+      Odoo__Username: ${ODOO_USERNAME:-admin}
+      Odoo__Password: ${ODOO_API_PASSWORD:-admin}
+    ports:
+      - "5000:8080"
+    networks:
+      - bank-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bank-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    networks:
+      - bank-network
+
+  # --- Odoo Community : ERP (CRM + Comptabilité) ---
+  # Odoo a besoin de son propre utilisateur PostgreSQL avec le droit CREATEDB,
+  # on lui dédie donc sa propre instance PostgreSQL (séparée de la base bancaire).
+  odoo-db:
+    image: postgres:16-alpine
+    container_name: bank-odoo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${ODOO_DB_USER:-odoo}
+      POSTGRES_PASSWORD: ${ODOO_DB_PASSWORD:-odoopassword}
+    volumes:
+      - odoo_db_data:/var/lib/postgresql/data
+    networks:
+      - bank-network
+
+  odoo:
+    image: odoo:17.0
+    container_name: bank-odoo
+    restart: unless-stopped
+    depends_on:
+      - odoo-db
+    environment:
+      HOST: odoo-db
+      USER: ${ODOO_DB_USER:-odoo}
+      PASSWORD: ${ODOO_DB_PASSWORD:-odoopassword}
+    ports:
+      - "8069:8069"
+    volumes:
+      - odoo_web_data:/var/lib/odoo
+      - odoo_addons:/mnt/extra-addons
+    networks:
+      - bank-network
+
+volumes:
+  pgdata:
+  odoo_db_data:
+  odoo_web_data:
+  odoo_addons:
+
+networks:
+  bank-network:
+    driver: bridge

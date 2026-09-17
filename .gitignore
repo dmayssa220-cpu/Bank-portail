@@ -1,0 +1,60 @@
+# ============================
+# Secrets — NE JAMAIS COMMITER
+# ============================
+.env
+*.env.local
+**/appsettings.Production.json
+**/appsettings.*.local.json
+
+# ============================
+# .NET / Backend
+# ============================
+backend/**/bin/
+backend/**/obj/
+**/bin/
+**/obj/
+*.user
+*.suo
+.vs/
+*.dbmdl
+*.pdb
+
+# ============================
+# Node / React / Frontend
+# ============================
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================
+# Docker
+# ============================
+**/pgdata/
+**/odoo-data/
+**/odoo-addons-cache/
+
+# ============================
+# Éditeurs / OS
+# ============================
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================
+# Logs
+# ============================
+*.log
+logs/
+
+# ============================
+# Archives générées
+# ============================
+*.zip
