@@ -35,6 +35,8 @@ public class BankDbContext : DbContext
             Id = customerId,
             FullName = "Ahmed Ben Salah",
             Email = "ahmed.bensalah@example.com",
+            // Mot de passe de démonstration : "password123" (à changer si vous partagez le projet publiquement)
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password123"),
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
 

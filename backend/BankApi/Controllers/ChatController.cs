@@ -1,5 +1,7 @@
 using BankApi.Data;
+using BankApi.Extensions;
 using BankApi.Integrations.Ollama;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +11,7 @@ public record ChatRequestDto(string Message, List<ChatMessage>? History);
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class ChatController : ControllerBase
 {
     private readonly OllamaClient _ollama;
@@ -21,18 +24,20 @@ public class ChatController : ControllerBase
     }
 
     // POST /api/chat/ask
-    // Démo de RAG "léger" : on injecte les données réelles du compte de démo dans le prompt système,
-    // pour que le modèle local puisse répondre à des questions du type "quel est mon solde ?"
-    // NOTE: en production, il faudrait restreindre ce contexte au client authentifié uniquement (claim JWT),
-    // jamais renvoyer les données d'un autre client dans le prompt.
+    // Démo de RAG "léger" : on injecte les données réelles du client authentifié (premier compte
+    // trouvé) dans le prompt système, pour que le modèle local puisse répondre à des questions
+    // du type "quel est mon solde ?" — jamais les données d'un autre client.
     [HttpPost("ask")]
     public async Task<IActionResult> Ask([FromBody] ChatRequestDto request)
     {
         if (string.IsNullOrWhiteSpace(request.Message))
             return BadRequest("Le message ne peut pas être vide.");
 
+        var customerId = User.GetCustomerId();
+
         var account = await _db.Accounts
             .Include(a => a.Customer)
+            .Where(a => a.CustomerId == customerId)
             .FirstOrDefaultAsync();
 
         var recentTransactions = account is null

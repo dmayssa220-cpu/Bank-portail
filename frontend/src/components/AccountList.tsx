@@ -1,17 +1,35 @@
-import { useEffect, useState } from 'react'
-import { getAccounts, type AccountDto } from '../api/client'
+import { useState } from 'react'
+import { createAccount, deleteAccount, type AccountDto } from '../api/client'
 
-export function AccountList() {
-  const [accounts, setAccounts] = useState<AccountDto[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+interface Props {
+  accounts: AccountDto[]
+  loading: boolean
+  error: string | null
+  onChanged: () => void
+}
 
-  useEffect(() => {
-    getAccounts()
-      .then(setAccounts)
-      .catch(() => setError("Impossible de charger les comptes. Vérifiez que l'API est démarrée."))
-      .finally(() => setLoading(false))
-  }, [])
+export function AccountList({ accounts, loading, error, onChanged }: Props) {
+  const [creating, setCreating] = useState(false)
+
+  const handleCreate = async () => {
+    setCreating(true)
+    try {
+      await createAccount('TND')
+      onChanged()
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Fermer ce compte ? (uniquement possible si le solde est à zéro)')) return
+    try {
+      await deleteAccount(id)
+      onChanged()
+    } catch {
+      alert('Impossible de fermer ce compte (solde non nul ?).')
+    }
+  }
 
   if (loading) return <p>Chargement des comptes...</p>
   if (error) return <p className="error">{error}</p>
@@ -28,8 +46,16 @@ export function AccountList() {
           <div className="account-card__balance">
             {acc.balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} {acc.currency}
           </div>
+          {acc.balance === 0 && (
+            <button className="account-card__close" onClick={() => handleDelete(acc.id)}>
+              Fermer ce compte
+            </button>
+          )}
         </div>
       ))}
+      <button className="account-list__add" onClick={handleCreate} disabled={creating}>
+        {creating ? 'Création...' : '+ Ouvrir un nouveau compte'}
+      </button>
     </div>
   )
 }

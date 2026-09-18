@@ -47,6 +47,185 @@
   color: #d92d20;
 }
 
+/* --- Dashboard topbar --- */
+.dashboard__topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.logout-btn {
+  background: white;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+/* --- Account list additions --- */
+.account-card__close {
+  margin-top: 0.5rem;
+  background: none;
+  border: 1px solid #d92d20;
+  color: #d92d20;
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.account-list__add {
+  background: white;
+  border: 1px dashed #98a2b3;
+  border-radius: 10px;
+  padding: 0.75rem;
+  cursor: pointer;
+  color: #475467;
+}
+
+/* --- Auth pages (login/register) --- */
+.auth-page {
+  min-height: calc(100vh - 60px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.auth-card {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.auth-card h1 {
+  margin: 0;
+  text-align: center;
+}
+
+.auth-subtitle {
+  text-align: center;
+  color: #667085;
+  margin: 0 0 0.5rem;
+}
+
+.auth-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #344054;
+}
+
+.auth-card input,
+.auth-card select {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.auth-card button[type='submit'] {
+  background: #0b2545;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.7rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  margin-top: 0.3rem;
+}
+
+.auth-card button[type='submit']:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-footer {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #667085;
+}
+
+.auth-hint {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #98a2b3;
+}
+
+/* --- Transfer form --- */
+.transfer-form-card {
+  background: white;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin-top: 1.5rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.transfer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.transfer-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #344054;
+}
+
+.transfer-form input,
+.transfer-form select {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.transfer-form button {
+  background: #0b2545;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.7rem;
+  cursor: pointer;
+  margin-top: 0.3rem;
+}
+
+.transfer-result {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eef1f6;
+  font-size: 0.9rem;
+}
+
+.fraud-alert {
+  margin-top: 0.5rem;
+  background: #fff4e5;
+  border: 1px solid #f79009;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  color: #93370d;
+}
+
+.fraud-alert ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.2rem;
+}
+
 /* --- Chat Widget --- */
 .chat-widget {
   position: fixed;

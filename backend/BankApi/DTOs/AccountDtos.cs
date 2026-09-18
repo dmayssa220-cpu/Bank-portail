@@ -6,4 +6,8 @@ public record TransferRequestDto(Guid FromAccountId, string ToIban, decimal Amou
 
 public record LoginRequestDto(string Email, string Password);
 
-public record LoginResponseDto(string Token, string FullName, DateTime ExpiresAt);
+public record RegisterRequestDto(string FullName, string Email, string Password);
+
+public record LoginResponseDto(string Token, Guid CustomerId, string FullName, DateTime ExpiresAt);
+
+public record CreateAccountRequestDto(string Currency);
