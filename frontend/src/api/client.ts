@@ -35,3 +35,16 @@ export const login = async (email: string, password: string) => {
   const { data } = await apiClient.post('/auth/login', { email, password })
   return data
 }
+
+export interface ChatTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export const askChatbot = async (message: string, history: ChatTurn[]): Promise<string> => {
+  const { data } = await apiClient.post<{ answer: string }>('/chat/ask', {
+    message,
+    history: history.map((h) => ({ role: h.role, content: h.content }))
+  })
+  return data.answer
+}
