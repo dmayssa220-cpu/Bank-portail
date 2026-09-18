@@ -39,6 +39,8 @@ services:
       Odoo__Database: ${ODOO_DATABASE:-bankportal}
       Odoo__Username: ${ODOO_USERNAME:-admin}
       Odoo__Password: ${ODOO_API_PASSWORD:-admin}
+      Ollama__Url: ${OLLAMA_URL:-http://ollama:11434}
+      Ollama__Model: ${OLLAMA_MODEL:-qwen2.5:0.5b}
     ports:
       - "5000:8080"
     networks:
@@ -91,11 +93,24 @@ services:
     networks:
       - bank-network
 
+  # --- Ollama : LLM local et 100% gratuit pour le chatbot ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bank-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - bank-network
+    
 volumes:
   pgdata:
   odoo_db_data:
   odoo_web_data:
   odoo_addons:
+  ollama_data:
 
 networks:
   bank-network:

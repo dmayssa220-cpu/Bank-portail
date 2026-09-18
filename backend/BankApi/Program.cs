@@ -28,6 +28,11 @@ builder.Services.Configure<BankApi.Integrations.Odoo.OdooOptions>(
     builder.Configuration.GetSection(BankApi.Integrations.Odoo.OdooOptions.SectionName));
 builder.Services.AddHttpClient<BankApi.Integrations.Odoo.OdooClient>();
 
+// --- Intégration Ollama (chatbot IA local) ---
+builder.Services.Configure<BankApi.Integrations.Ollama.OllamaOptions>(
+    builder.Configuration.GetSection(BankApi.Integrations.Ollama.OllamaOptions.SectionName));
+builder.Services.AddHttpClient<BankApi.Integrations.Ollama.OllamaClient>();
+
 // --- CORS : autoriser le frontend React ---
 var frontendOrigin = builder.Configuration["FrontendOrigin"] ?? "http://localhost:3000";
 builder.Services.AddCors(options =>

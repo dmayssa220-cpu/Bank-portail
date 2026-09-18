@@ -1,4 +1,5 @@
 import { Dashboard } from './pages/Dashboard'
+import { ChatWidget } from './components/ChatWidget'
 import './App.css'
 
 function App() {
@@ -8,6 +9,7 @@ function App() {
         <span className="app-logo">🏦 Ma Banque</span>
       </header>
       <Dashboard />
+      <ChatWidget />
     </div>
   )
 }
