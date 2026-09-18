@@ -26,7 +26,7 @@ public class ChatController : ControllerBase
     // NOTE: en production, il faudrait restreindre ce contexte au client authentifié uniquement (claim JWT),
     // jamais renvoyer les données d'un autre client dans le prompt.
     [HttpPost("ask")]
-    public async Task<IActionResult> Ask([FromBody] ChatRequestDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Ask([FromBody] ChatRequestDto request)
     {
         if (string.IsNullOrWhiteSpace(request.Message))
             return BadRequest("Le message ne peut pas être vide.");
@@ -65,7 +65,7 @@ public class ChatController : ControllerBase
 
         conversation.Add(new ChatMessage("user", request.Message));
 
-        var answer = await _ollama.AskAsync(conversation, cancellationToken);
+        var answer = await _ollama.AskAsync(conversation);
 
         return Ok(new { answer });
     }

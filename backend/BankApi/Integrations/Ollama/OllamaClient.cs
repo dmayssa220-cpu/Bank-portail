@@ -32,7 +32,7 @@ public class OllamaClient
         _http = http;
         _options = options.Value;
         _http.BaseAddress = new Uri(_options.Url);
-        _http.Timeout = TimeSpan.FromMinutes(5); // le premier chargement du modèle peut être lent sur CPU
+        _http.Timeout = TimeSpan.FromSeconds(60); // les modèles locaux peuvent être lents sur CPU
     }
 
     public async Task<string> AskAsync(List<ChatMessage> conversation, CancellationToken ct = default)

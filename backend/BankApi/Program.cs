@@ -33,6 +33,9 @@ builder.Services.Configure<BankApi.Integrations.Ollama.OllamaOptions>(
     builder.Configuration.GetSection(BankApi.Integrations.Ollama.OllamaOptions.SectionName));
 builder.Services.AddHttpClient<BankApi.Integrations.Ollama.OllamaClient>();
 
+// --- Détection de fraude (ML.NET, entraîné sur données synthétiques au démarrage) ---
+builder.Services.AddSingleton<BankApi.Integrations.Fraud.FraudDetectionService>();
+
 // --- CORS : autoriser le frontend React ---
 var frontendOrigin = builder.Configuration["FrontendOrigin"] ?? "http://localhost:3000";
 builder.Services.AddCors(options =>
