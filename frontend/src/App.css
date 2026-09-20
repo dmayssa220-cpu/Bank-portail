@@ -2,6 +2,29 @@
   background: #0b2545;
   color: white;
   padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.app-nav {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.nav-link {
+  color: #c9d4e3;
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 2px solid transparent;
+}
+
+.nav-link--active {
+  color: white;
+  border-bottom-color: white;
 }
 
 .app-logo {

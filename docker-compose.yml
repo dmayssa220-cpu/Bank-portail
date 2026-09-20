@@ -104,7 +104,15 @@ services:
       - ollama_data:/root/.ollama
     networks:
       - bank-network
-    
+    # Décommentez si vous avez un GPU NVIDIA compatible (accélère beaucoup les réponses) :
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
 volumes:
   pgdata:
   odoo_db_data:

@@ -10,6 +10,8 @@ public class BankDbContext : DbContext
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
+    public DbSet<CreditRequest> CreditRequests => Set<CreditRequest>();
+    public DbSet<BankCard> BankCards => Set<BankCard>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +27,16 @@ public class BankDbContext : DbContext
         modelBuilder.Entity<Transaction>()
             .HasIndex(t => t.IdempotencyKey)
             .IsUnique();
+
+        modelBuilder.Entity<CreditRequest>()
+            .HasOne(c => c.Customer)
+            .WithMany()
+            .HasForeignKey(c => c.CustomerId);
+
+        modelBuilder.Entity<BankCard>()
+            .HasOne(c => c.Account)
+            .WithMany()
+            .HasForeignKey(c => c.AccountId);
 
         // Données de démonstration (seed) pour tester rapidement l'API
         var customerId = Guid.Parse("11111111-1111-1111-1111-111111111111");
