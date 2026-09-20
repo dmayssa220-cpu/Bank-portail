@@ -2,19 +2,28 @@ using BankApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --- Configuration de la base de données PostgreSQL ---
+// ============================================================
+// Configuration de la base de données PostgreSQL
+// ============================================================
+
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? "Host=postgres;Database=bankdb;Username=bankuser;Password=bankpassword";
 
 builder.Services.AddDbContext<BankDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// --- Authentification JWT ---
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "dev-secret-key-change-me-in-production-please";
+
+// ============================================================
+// Authentification JWT
+// ============================================================
+
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? "dev-secret-key-change-me-in-production-please";
 
 builder.Services.AddAuthentication(options =>
 {
@@ -27,93 +36,307 @@ builder.Services.AddAuthentication(options =>
     {
         ValidateIssuer = true,
         ValidIssuer = "BankApi",
+
         ValidateAudience = true,
         ValidAudience = "BankApiClients",
+
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtKey)
+        ),
+
         ValidateLifetime = true,
         ClockSkew = TimeSpan.FromMinutes(1)
+    };
+
+    // --------------------------------------------------------
+    // Logs de diagnostic JWT
+    // --------------------------------------------------------
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            Console.WriteLine("===== JWT MESSAGE RECEIVED =====");
+
+            Console.WriteLine(
+                $"Authorization: {context.Request.Headers.Authorization}"
+            );
+
+            return Task.CompletedTask;
+        },
+
+        OnAuthenticationFailed = context =>
+        {
+            Console.WriteLine("===== JWT AUTHENTICATION FAILED =====");
+
+            Console.WriteLine(
+                $"Exception: {context.Exception.Message}"
+            );
+
+            Console.WriteLine(
+                context.Exception.ToString()
+            );
+
+            return Task.CompletedTask;
+        },
+
+        OnTokenValidated = context =>
+        {
+            Console.WriteLine("===== JWT TOKEN VALIDATED =====");
+
+            foreach (var claim in context.Principal!.Claims)
+            {
+                Console.WriteLine(
+                    $"{claim.Type} = {claim.Value}"
+                );
+            }
+
+            return Task.CompletedTask;
+        },
+
+        OnChallenge = context =>
+        {
+            Console.WriteLine("===== JWT CHALLENGE =====");
+
+            Console.WriteLine(
+                $"Error: {context.Error}"
+            );
+
+            Console.WriteLine(
+                $"Description: {context.ErrorDescription}"
+            );
+
+            return Task.CompletedTask;
+        }
     };
 });
 
 builder.Services.AddAuthorization();
 
-// --- Services API ---
+
+// ============================================================
+// Services API
+// ============================================================
+
 builder.Services.AddControllers();
+
 builder.Services.AddEndpointsApiExplorer();
+
+
+// ============================================================
+// Swagger / OpenAPI
+// ============================================================
+
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    c.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "Bank API",
         Version = "v1",
         Description = "Squelette d'API bancaire — .NET 8 / PostgreSQL"
     });
 
-    var securityScheme = new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    // --------------------------------------------------------
+    // Configuration JWT Bearer pour Swagger
+    // --------------------------------------------------------
+
+    var securityScheme = new OpenApiSecurityScheme
     {
         Name = "Authorization",
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+
+        Type = SecuritySchemeType.Http,
+
         Scheme = "bearer",
+
         BearerFormat = "JWT",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Description = "Collez ici uniquement le token JWT (sans le préfixe 'Bearer ')."
+
+        In = ParameterLocation.Header,
+
+        Description = "Entrez votre token JWT."
     };
-    c.AddSecurityDefinition("Bearer", securityScheme);
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+
+    c.AddSecurityDefinition(
+        "Bearer",
+        securityScheme
+    );
+
+    // --------------------------------------------------------
+    // Indiquer à Swagger que les endpoints peuvent
+    // utiliser le schéma Bearer
+    // --------------------------------------------------------
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
-        { securityScheme, Array.Empty<string>() }
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+
+            Array.Empty<string>()
+        }
     });
 });
 
-// --- Intégration Odoo (ERP) ---
+
+// ============================================================
+// Intégration Odoo (ERP)
+// ============================================================
+
 builder.Services.Configure<BankApi.Integrations.Odoo.OdooOptions>(
-    builder.Configuration.GetSection(BankApi.Integrations.Odoo.OdooOptions.SectionName));
-builder.Services.AddHttpClient<BankApi.Integrations.Odoo.OdooClient>();
+    builder.Configuration.GetSection(
+        BankApi.Integrations.Odoo.OdooOptions.SectionName
+    )
+);
 
-// --- Intégration Ollama (chatbot IA local) ---
+builder.Services.AddHttpClient<
+    BankApi.Integrations.Odoo.OdooClient
+>();
+
+
+// ============================================================
+// Intégration Ollama (chatbot IA local)
+// ============================================================
+
 builder.Services.Configure<BankApi.Integrations.Ollama.OllamaOptions>(
-    builder.Configuration.GetSection(BankApi.Integrations.Ollama.OllamaOptions.SectionName));
-builder.Services.AddHttpClient<BankApi.Integrations.Ollama.OllamaClient>();
+    builder.Configuration.GetSection(
+        BankApi.Integrations.Ollama.OllamaOptions.SectionName
+    )
+);
 
-// --- Détection de fraude (ML.NET, entraîné sur données synthétiques au démarrage) ---
-builder.Services.AddSingleton<BankApi.Integrations.Fraud.FraudDetectionService>();
+builder.Services.AddHttpClient<
+    BankApi.Integrations.Ollama.OllamaClient
+>();
 
-// --- CORS : autoriser le frontend React ---
-var frontendOrigin = builder.Configuration["FrontendOrigin"] ?? "http://localhost:3000";
+
+// ============================================================
+// Détection de fraude (ML.NET)
+// ============================================================
+
+builder.Services.AddSingleton<
+    BankApi.Integrations.Fraud.FraudDetectionService
+>();
+
+
+// ============================================================
+// Simulateur de crédit
+// ============================================================
+
+builder.Services.Configure<BankApi.Integrations.Credit.CreditOptions>(
+    builder.Configuration.GetSection(
+        BankApi.Integrations.Credit.CreditOptions.SectionName
+    )
+);
+
+
+// ============================================================
+// CORS
+// Autoriser le frontend React
+// ============================================================
+
+var frontendOrigin =
+    builder.Configuration["FrontendOrigin"]
+    ?? "http://localhost:3000";
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(frontendOrigin)
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy
+            .WithOrigins(frontendOrigin)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
+
+// ============================================================
+// Construction de l'application
+// ============================================================
+
 var app = builder.Build();
 
-// --- Création automatique du schéma + seed au démarrage (pratique pour ce squelette) ---
-// IMPORTANT : EnsureCreated() est utilisé ici uniquement pour démarrer rapidement en local.
-// En production, remplacer par de vraies migrations EF Core versionnées :
-//   dotnet ef migrations add InitialCreate
-//   dotnet ef database update
-// (EnsureCreated et Migrate ne doivent jamais être mélangés sur la même base)
+
+// ============================================================
+// Création automatique du schéma + seed au démarrage
+// ============================================================
+
+// IMPORTANT :
+// EnsureCreated() est utilisé ici uniquement pour démarrer
+// rapidement en local.
+//
+// En production, remplacer par de vraies migrations EF Core :
+//
+// dotnet ef migrations add InitialCreate
+// dotnet ef database update
+//
+// EnsureCreated() et Migrate() ne doivent jamais être
+// mélangés sur la même base.
+
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<BankDbContext>();
+    var db = scope.ServiceProvider
+        .GetRequiredService<BankDbContext>();
+
     db.Database.EnsureCreated();
 }
 
+
+// ============================================================
+// Swagger
+// ============================================================
+
 app.UseSwagger();
+
 app.UseSwaggerUI();
 
+
+// ============================================================
+// CORS
+// ============================================================
+
 app.UseCors("AllowFrontend");
+
+
+// ============================================================
+// Authentication / Authorization
+// ============================================================
+
 app.UseAuthentication();
+
 app.UseAuthorization();
+
+
+// ============================================================
+// Controllers
+// ============================================================
+
 app.MapControllers();
 
+
+// ============================================================
 // Endpoint de santé pour Docker / monitoring
-app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+// ============================================================
+
+app.MapGet(
+    "/health",
+    () => Results.Ok(
+        new
+        {
+            status = "healthy",
+            timestamp = DateTime.UtcNow
+        }
+    )
+);
+
+
+// ============================================================
+// Démarrage
+// ============================================================
 
 app.Run();

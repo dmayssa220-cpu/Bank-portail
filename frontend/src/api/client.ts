@@ -131,3 +131,73 @@ export const askChatbot = async (message: string, history: ChatTurn[]): Promise<
   })
   return data.answer
 }
+
+// --- Crédit ---
+export interface CreditSimulationResult {
+  amount: number
+  durationMonths: number
+  annualRatePercent: number
+  monthlyPayment: number
+  totalCost: number
+  totalInterest: number
+}
+
+export interface CreditRequestResult {
+  id: string
+  amount: number
+  durationMonths: number
+  monthlyPayment: number
+  totalCost: number
+  status: string
+  createdAt: string
+}
+
+export const simulateCredit = async (amount: number, durationMonths: number): Promise<CreditSimulationResult> => {
+  const { data } = await apiClient.post<CreditSimulationResult>('/credit/simulate', { amount, durationMonths })
+  return data
+}
+
+export const applyForCredit = async (amount: number, durationMonths: number): Promise<CreditRequestResult> => {
+  const { data } = await apiClient.post<CreditRequestResult>('/credit/apply', { amount, durationMonths })
+  return data
+}
+
+export const getMyCreditRequests = async (): Promise<CreditRequestResult[]> => {
+  const { data } = await apiClient.get<CreditRequestResult[]>('/credit/my-requests')
+  return data
+}
+
+// --- Cartes ---
+export interface CardDto {
+  id: string
+  cardNumberMasked: string
+  cardHolderName: string
+  expiryDate: string
+  isBlocked: boolean
+  dailyLimit: number
+  accountIban: string
+}
+
+export const getCards = async (): Promise<CardDto[]> => {
+  const { data } = await apiClient.get<CardDto[]>('/cards')
+  return data
+}
+
+export const createCard = async (accountId: string): Promise<CardDto> => {
+  const { data } = await apiClient.post<CardDto>('/cards', { accountId })
+  return data
+}
+
+export const toggleCardBlock = async (cardId: string, block: boolean): Promise<CardDto> => {
+  const { data } = await apiClient.patch<CardDto>(`/cards/${cardId}/${block ? 'block' : 'unblock'}`)
+  return data
+}
+
+export const updateCardLimit = async (cardId: string, dailyLimit: number): Promise<CardDto> => {
+  const { data } = await apiClient.patch<CardDto>(`/cards/${cardId}/limit`, { dailyLimit })
+  return data
+}
+
+export const deleteCard = async (cardId: string): Promise<void> => {
+  await apiClient.delete(`/cards/${cardId}`)
+}
