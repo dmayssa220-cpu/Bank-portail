@@ -12,6 +12,7 @@ public class BankDbContext : DbContext
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<CreditRequest> CreditRequests => Set<CreditRequest>();
     public DbSet<BankCard> BankCards => Set<BankCard>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,6 +38,11 @@ public class BankDbContext : DbContext
             .HasOne(c => c.Account)
             .WithMany()
             .HasForeignKey(c => c.AccountId);
+
+        modelBuilder.Entity<Notification>()
+            .HasOne(n => n.Customer)
+            .WithMany()
+            .HasForeignKey(n => n.CustomerId);
 
         // Données de démonstration (seed) pour tester rapidement l'API
         var customerId = Guid.Parse("11111111-1111-1111-1111-111111111111");

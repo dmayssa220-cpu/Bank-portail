@@ -201,3 +201,45 @@ export const updateCardLimit = async (cardId: string, dailyLimit: number): Promi
 export const deleteCard = async (cardId: string): Promise<void> => {
   await apiClient.delete(`/cards/${cardId}`)
 }
+
+// --- Notifications ---
+export interface NotificationDto {
+  id: string
+  title: string
+  message: string
+  type: 'Info' | 'Success' | 'Warning'
+  isRead: boolean
+  createdAt: string
+}
+
+export const getNotifications = async (): Promise<NotificationDto[]> => {
+  const { data } = await apiClient.get<NotificationDto[]>('/notifications')
+  return data
+}
+
+export const getUnreadCount = async (): Promise<number> => {
+  const { data } = await apiClient.get<{ count: number }>('/notifications/unread-count')
+  return data.count
+}
+
+export const markNotificationAsRead = async (id: string): Promise<void> => {
+  await apiClient.patch(`/notifications/${id}/read`)
+}
+
+export const markAllNotificationsAsRead = async (): Promise<void> => {
+  await apiClient.patch('/notifications/read-all')
+}
+
+// --- Historique des virements ---
+export interface TransferHistoryItem {
+  id: string
+  amount: number
+  label: string
+  createdAt: string
+  fromAccountIban: string
+}
+
+export const getTransferHistory = async (): Promise<TransferHistoryItem[]> => {
+  const { data } = await apiClient.get<TransferHistoryItem[]>('/transfers')
+  return data
+}

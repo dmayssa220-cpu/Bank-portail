@@ -31,7 +31,7 @@ export function AccountList({ accounts, loading, error, onChanged }: Props) {
     }
   }
 
-  if (loading) return <p>Chargement des comptes...</p>
+  if (loading) return <div className="spinner" />
   if (error) return <p className="error">{error}</p>
 
   return (

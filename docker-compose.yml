@@ -104,6 +104,27 @@ services:
       - ollama_data:/root/.ollama
     networks:
       - bank-network
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: bank-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:0.5b}
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - bank-network
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull \"$${OLLAMA_MODEL}\""]
     # Décommentez si vous avez un GPU NVIDIA compatible (accélère beaucoup les réponses) :
     # deploy:
     #   resources:
