@@ -224,6 +224,15 @@ builder.Services.AddSingleton<
 
 
 // ============================================================
+// Notifications (in-app + simulation d'envoi email)
+// ============================================================
+
+builder.Services.AddScoped<
+    BankApi.Integrations.Notifications.NotificationService
+>();
+
+
+// ============================================================
 // Simulateur de crédit
 // ============================================================
 

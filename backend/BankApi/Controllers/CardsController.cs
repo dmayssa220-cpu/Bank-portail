@@ -1,6 +1,7 @@
 using BankApi.Data;
 using BankApi.DTOs;
 using BankApi.Extensions;
+using BankApi.Integrations.Notifications;
 using BankApi.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,10 +15,12 @@ namespace BankApi.Controllers;
 public class CardsController : ControllerBase
 {
     private readonly BankDbContext _db;
+    private readonly NotificationService _notifications;
 
-    public CardsController(BankDbContext db)
+    public CardsController(BankDbContext db, NotificationService notifications)
     {
         _db = db;
+        _notifications = notifications;
     }
 
     // GET /api/cards — toutes les cartes des comptes du client connecté
@@ -62,6 +65,12 @@ public class CardsController : ControllerBase
 
         _db.BankCards.Add(card);
         await _db.SaveChangesAsync();
+
+        await _notifications.NotifyAsync(
+            customerId,
+            "Nouvelle carte émise",
+            $"Une nouvelle carte {card.CardNumberMasked} a été associée à votre compte {account.Iban}.",
+            NotificationType.Success);
 
         return Ok(ToDto(card, account.Iban));
     }
@@ -128,6 +137,14 @@ public class CardsController : ControllerBase
 
         card.IsBlocked = blocked;
         await _db.SaveChangesAsync();
+
+        await _notifications.NotifyAsync(
+            User.GetCustomerId(),
+            blocked ? "Carte bloquée" : "Carte débloquée",
+            blocked
+                ? $"Votre carte {card.CardNumberMasked} a été bloquée."
+                : $"Votre carte {card.CardNumberMasked} a été débloquée.",
+            blocked ? NotificationType.Warning : NotificationType.Info);
 
         return Ok(ToDto(card));
     }

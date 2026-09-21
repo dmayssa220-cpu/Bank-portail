@@ -5,6 +5,7 @@ import { Register } from './pages/Register'
 import { Credit } from './pages/Credit'
 import { Cards } from './pages/Cards'
 import { ChatWidget } from './components/ChatWidget'
+import { NotificationBell } from './components/NotificationBell'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 import { useAuth } from './auth/AuthContext'
 import './App.css'
@@ -29,7 +30,12 @@ function App() {
     <div className="app">
       <header className="app-header">
         <span className="app-logo">🏦 Ma Banque</span>
-        {isAuthenticated && <NavLinks />}
+        {isAuthenticated && (
+          <div className="app-header__right">
+            <NavLinks />
+            <NotificationBell />
+          </div>
+        )}
       </header>
 
       <Routes>

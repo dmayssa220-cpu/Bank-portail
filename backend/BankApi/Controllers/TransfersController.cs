@@ -2,6 +2,7 @@ using BankApi.Data;
 using BankApi.DTOs;
 using BankApi.Extensions;
 using BankApi.Integrations.Fraud;
+using BankApi.Integrations.Notifications;
 using BankApi.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,12 +17,18 @@ public class TransfersController : ControllerBase
 {
     private readonly BankDbContext _db;
     private readonly FraudDetectionService _fraud;
+    private readonly NotificationService _notifications;
     private readonly ILogger<TransfersController> _logger;
 
-    public TransfersController(BankDbContext db, FraudDetectionService fraud, ILogger<TransfersController> logger)
+    public TransfersController(
+        BankDbContext db,
+        FraudDetectionService fraud,
+        NotificationService notifications,
+        ILogger<TransfersController> logger)
     {
         _db = db;
         _fraud = fraud;
+        _notifications = notifications;
         _logger = logger;
     }
 
@@ -95,6 +102,14 @@ public class TransfersController : ControllerBase
         await dbTransaction.CommitAsync();
 
         _logger.LogInformation("Virement de {Amount} effectué depuis le compte {AccountId}", request.Amount, sourceAccount.Id);
+
+        await _notifications.NotifyAsync(
+            customerId,
+            fraudResult.IsSuspicious ? "Virement signalé" : "Virement effectué",
+            fraudResult.IsSuspicious
+                ? $"Votre virement de {request.Amount} vers {request.ToIban} a été effectué mais présente un profil de risque élevé. Vérifiez qu'il s'agit bien de vous."
+                : $"Un virement de {request.Amount} vers {request.ToIban} a été effectué avec succès.",
+            fraudResult.IsSuspicious ? NotificationType.Warning : NotificationType.Success);
 
         return Ok(new
         {

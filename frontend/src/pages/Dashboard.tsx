@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AccountList } from '../components/AccountList'
 import { TransferForm } from '../components/TransferForm'
+import { TransferHistory } from '../components/TransferHistory'
 import { getAccounts, type AccountDto } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 
@@ -8,6 +9,7 @@ export function Dashboard() {
   const [accounts, setAccounts] = useState<AccountDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [historyKey, setHistoryKey] = useState(0)
   const { fullName, logout } = useAuth()
 
   const loadAccounts = useCallback(() => {
@@ -22,6 +24,11 @@ export function Dashboard() {
     loadAccounts()
   }, [loadAccounts])
 
+  const handleTransferDone = () => {
+    loadAccounts()
+    setHistoryKey((k) => k + 1) // force le rafraîchissement de l'historique
+  }
+
   return (
     <main className="dashboard">
       <div className="dashboard__topbar">
@@ -35,8 +42,10 @@ export function Dashboard() {
       <AccountList accounts={accounts} loading={loading} error={error} onChanged={loadAccounts} />
 
       {accounts.length > 0 && (
-        <TransferForm accounts={accounts} onTransferDone={loadAccounts} />
+        <TransferForm accounts={accounts} onTransferDone={handleTransferDone} />
       )}
+
+      <TransferHistory refreshKey={historyKey} />
     </main>
   )
 }

@@ -2,6 +2,7 @@ using BankApi.Data;
 using BankApi.DTOs;
 using BankApi.Extensions;
 using BankApi.Integrations.Credit;
+using BankApi.Integrations.Notifications;
 using BankApi.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,11 +18,13 @@ public class CreditController : ControllerBase
 {
     private readonly BankDbContext _db;
     private readonly CreditOptions _options;
+    private readonly NotificationService _notifications;
 
-    public CreditController(BankDbContext db, IOptions<CreditOptions> options)
+    public CreditController(BankDbContext db, IOptions<CreditOptions> options, NotificationService notifications)
     {
         _db = db;
         _options = options.Value;
+        _notifications = notifications;
     }
 
     // POST /api/credit/simulate — simulation pure, ne crée rien en base
@@ -61,6 +64,12 @@ public class CreditController : ControllerBase
 
         _db.CreditRequests.Add(creditRequest);
         await _db.SaveChangesAsync();
+
+        await _notifications.NotifyAsync(
+            customerId,
+            "Demande de crédit reçue",
+            $"Votre demande de {request.Amount} sur {request.DurationMonths} mois a été enregistrée et est en attente d'examen.",
+            NotificationType.Info);
 
         return Ok(ToDto(creditRequest));
     }

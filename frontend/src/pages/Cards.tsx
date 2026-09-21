@@ -67,7 +67,7 @@ export function Cards() {
     await load()
   }
 
-  if (loading) return <main className="dashboard"><p>Chargement...</p></main>
+  if (loading) return <main className="dashboard"><div className="spinner" /></main>
 
   return (
     <main className="dashboard">
