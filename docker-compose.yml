@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -30,6 +28,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       ConnectionStrings__Default: "Host=postgres;Database=${POSTGRES_DB:-bankdb};Username=${POSTGRES_USER:-bankuser};Password=${POSTGRES_PASSWORD:-bankpassword}"
       FrontendOrigin: "http://localhost:3000"
@@ -40,7 +40,14 @@ services:
       Odoo__Username: ${ODOO_USERNAME:-admin}
       Odoo__Password: ${ODOO_API_PASSWORD:-admin}
       Ollama__Url: ${OLLAMA_URL:-http://ollama:11434}
-      Ollama__Model: ${OLLAMA_MODEL:-qwen2.5:0.5b}
+      Ollama__Model: ${OLLAMA_MODEL:-llama3.2:1b}
+      RabbitMq__Host: ${RABBITMQ_HOST:-rabbitmq}
+      RabbitMq__Username: ${RABBITMQ_USER:-guest}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:-guest}
+      Email__Host: ${EMAIL_HOST:-mailhog}
+      Email__Port: ${EMAIL_PORT:-1025}
+      Email__FromAddress: ${EMAIL_FROM:-notifications@mabanque.local}
+      Redis__ConnectionString: ${REDIS_CONNECTION:-redis:6379}
     ports:
       - "5000:8080"
     networks:
@@ -59,9 +66,7 @@ services:
     networks:
       - bank-network
 
-  # --- Odoo Community : ERP (CRM + Comptabilité) ---
-  # Odoo a besoin de son propre utilisateur PostgreSQL avec le droit CREATEDB,
-  # on lui dédie donc sa propre instance PostgreSQL (séparée de la base bancaire).
+
   odoo-db:
     image: postgres:16-alpine
     container_name: bank-odoo-db
@@ -93,7 +98,7 @@ services:
     networks:
       - bank-network
 
-  # --- Ollama : LLM local et 100% gratuit pour le chatbot ---
+
   ollama:
     image: ollama/ollama:latest
     container_name: bank-ollama
@@ -104,35 +109,46 @@ services:
       - ollama_data:/root/.ollama
     networks:
       - bank-network
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
-  ollama-init:
-    image: ollama/ollama:latest
-    container_name: bank-ollama-init
-    depends_on:
-      ollama:
-        condition: service_healthy
+    
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: bank-rabbitmq
+    restart: unless-stopped
     environment:
-      OLLAMA_HOST: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:0.5b}
-    volumes:
-      - ollama_data:/root/.ollama
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"  
+      - "15672:15672" 
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
     networks:
       - bank-network
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["ollama pull \"$${OLLAMA_MODEL}\""]
-    # Décommentez si vous avez un GPU NVIDIA compatible (accélère beaucoup les réponses) :
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+
+  
+  
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: bank-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025" 
+      - "8025:8025" 
+    networks:
+      - bank-network
+
+ 
+  redis:
+    image: redis:7-alpine
+    container_name: bank-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - bank-network
 
 volumes:
   pgdata:

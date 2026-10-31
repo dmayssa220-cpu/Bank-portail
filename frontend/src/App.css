@@ -524,3 +524,69 @@
   padding: 0 1rem;
   cursor: pointer;
 }
+
+
+/* --- Messages de succès + page Profil / sécurité --- */
+.success {
+  color: #067647;
+}
+
+.security-status {
+  margin: 0.5rem 0;
+}
+
+.security-help {
+  font-size: 0.85rem;
+  color: #667085;
+  line-height: 1.45;
+}
+
+.security-help code,
+.auth-hint code {
+  background: #f2f4f7;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.security-steps {
+  font-size: 0.9rem;
+  color: #344054;
+  padding-left: 1.2rem;
+}
+
+.twofa-setup {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eef1f6;
+}
+
+.twofa-qr {
+  display: block;
+  margin: 0.75rem auto;
+  border: 1px solid #eef1f6;
+  border-radius: 8px;
+}
+
+.primary-btn,
+.danger-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+  color: white;
+  margin-top: 0.5rem;
+}
+
+.primary-btn {
+  background: #0b2545;
+}
+
+.danger-btn {
+  background: #d92d20;
+}
+
+.transfer-form input:disabled {
+  background: #f2f4f7;
+  color: #667085;
+}

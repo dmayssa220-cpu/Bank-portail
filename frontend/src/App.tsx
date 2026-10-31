@@ -4,6 +4,7 @@ import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import { Credit } from './pages/Credit'
 import { Cards } from './pages/Cards'
+import { Profile } from './pages/Profile'
 import { ChatWidget } from './components/ChatWidget'
 import { NotificationBell } from './components/NotificationBell'
 import { ProtectedRoute } from './auth/ProtectedRoute'
@@ -19,6 +20,7 @@ function NavLinks() {
       <Link className={isActive('/dashboard')} to="/dashboard">Comptes</Link>
       <Link className={isActive('/credit')} to="/credit">Crédit</Link>
       <Link className={isActive('/cards')} to="/cards">Cartes</Link>
+      <Link className={isActive('/profile')} to="/profile">Profil</Link>
     </nav>
   )
 }
@@ -62,6 +64,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Cards />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
             </ProtectedRoute>
           }
         />

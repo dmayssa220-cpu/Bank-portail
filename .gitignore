@@ -1,60 +1,37 @@
-# ============================
 # Secrets — NE JAMAIS COMMITER
-# ============================
 .env
 *.env.local
 **/appsettings.Production.json
 **/appsettings.*.local.json
 
-# ============================
-# .NET / Backend
-# ============================
-backend/**/bin/
-backend/**/obj/
+# .NET
 **/bin/
 **/obj/
 *.user
 *.suo
 .vs/
-*.dbmdl
 *.pdb
 
-# ============================
-# Node / React / Frontend
-# ============================
+# Node / React
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
 
-# ============================
-# Docker
-# ============================
+# Docker (volumes locaux éventuels)
 **/pgdata/
 **/odoo-data/
-**/odoo-addons-cache/
 
-# ============================
 # Éditeurs / OS
-# ============================
 .vscode/
-!.vscode/extensions.json
 .idea/
 *.swp
 .DS_Store
 Thumbs.db
-desktop.ini
 
-# ============================
-# Logs
-# ============================
+# Logs & archives
 *.log
 logs/
-
-# ============================
-# Archives générées
-# ============================
 *.zip

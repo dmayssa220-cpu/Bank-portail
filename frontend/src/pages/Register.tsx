@@ -26,7 +26,7 @@ export function Register() {
     setLoading(true)
     try {
       const result = await register(fullName, email, password)
-      auth.login(result.token, result.customerId, result.fullName)
+      auth.login(result.token!, result.customerId!, result.fullName!)
       navigate('/dashboard')
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 409) {

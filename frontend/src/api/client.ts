@@ -53,10 +53,12 @@ export interface TransactionDto {
 }
 
 export interface LoginResponse {
-  token: string
-  customerId: string
-  fullName: string
-  expiresAt: string
+  token?: string | null
+  customerId?: string | null
+  fullName?: string | null
+  expiresAt?: string | null
+  requiresTwoFactor: boolean
+  pendingToken?: string | null
 }
 
 export interface FraudScoreResult {
@@ -74,6 +76,11 @@ export interface TransferResult {
 // --- Authentification ---
 export const login = async (email: string, password: string): Promise<LoginResponse> => {
   const { data } = await apiClient.post<LoginResponse>('/auth/login', { email, password })
+  return data
+}
+
+export const loginWithTwoFactor = async (pendingToken: string, code: string): Promise<LoginResponse> => {
+  const { data } = await apiClient.post<LoginResponse>('/auth/login-2fa', { pendingToken, code })
   return data
 }
 
@@ -242,4 +249,44 @@ export interface TransferHistoryItem {
 export const getTransferHistory = async (): Promise<TransferHistoryItem[]> => {
   const { data } = await apiClient.get<TransferHistoryItem[]>('/transfers')
   return data
+}
+
+// --- Profil & sécurité ---
+export interface ProfileDto {
+  fullName: string
+  email: string
+  twoFactorEnabled: boolean
+  createdAt: string
+}
+
+export interface TwoFactorSetup {
+  secret: string
+  otpAuthUri: string
+}
+
+export const getProfile = async (): Promise<ProfileDto> => {
+  const { data } = await apiClient.get<ProfileDto>('/profile')
+  return data
+}
+
+export const updateProfile = async (fullName: string): Promise<ProfileDto> => {
+  const { data } = await apiClient.put<ProfileDto>('/profile', { fullName })
+  return data
+}
+
+export const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
+  await apiClient.put('/profile/password', { currentPassword, newPassword })
+}
+
+export const setupTwoFactor = async (): Promise<TwoFactorSetup> => {
+  const { data } = await apiClient.post<TwoFactorSetup>('/profile/2fa/setup')
+  return data
+}
+
+export const confirmTwoFactor = async (code: string): Promise<void> => {
+  await apiClient.post('/profile/2fa/confirm', { code })
+}
+
+export const disableTwoFactor = async (password: string): Promise<void> => {
+  await apiClient.post('/profile/2fa/disable', { password })
 }
