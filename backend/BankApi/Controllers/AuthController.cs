@@ -1,5 +1,7 @@
 using BankApi.Data;
 using BankApi.DTOs;
+using BankApi.Integrations.Caching;
+using BankApi.Integrations.TwoFactor;
 using BankApi.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,17 +16,22 @@ namespace BankApi.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
+    private static readonly TimeSpan PendingLoginTtl = TimeSpan.FromMinutes(5);
+
     private readonly BankDbContext _db;
     private readonly IConfiguration _config;
+    private readonly RedisCacheService _redis;
+    private readonly TwoFactorService _twoFactor;
 
-    public AuthController(BankDbContext db, IConfiguration config)
+    public AuthController(BankDbContext db, IConfiguration config, RedisCacheService redis, TwoFactorService twoFactor)
     {
         _db = db;
         _config = config;
+        _redis = redis;
+        _twoFactor = twoFactor;
     }
 
     // POST /api/auth/register
-    // Crée un client + un premier compte courant, avec mot de passe hashé (bcrypt).
     [HttpPost("register")]
     public async Task<ActionResult<LoginResponseDto>> Register([FromBody] RegisterRequestDto request)
     {
@@ -45,7 +52,6 @@ public class AuthController : ControllerBase
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password)
         };
 
-        // On crée automatiquement un premier compte courant, avec un IBAN factice généré
         var account = new Account
         {
             Iban = GenerateFakeIban(),
@@ -61,16 +67,46 @@ public class AuthController : ControllerBase
         return Ok(BuildLoginResponse(customer));
     }
 
-    // POST /api/auth/login
+    // POST /api/auth/login — étape 1 : email + mot de passe
     [HttpPost("login")]
     public async Task<ActionResult<LoginResponseDto>> Login([FromBody] LoginRequestDto request)
     {
         var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Email == request.Email);
 
-        // On renvoie volontairement le même message d'erreur générique dans les deux cas
-        // (email inconnu / mauvais mot de passe) pour ne pas révéler si un email existe.
+        // Message volontairement identique dans les deux cas : on ne révèle pas si l'email existe.
         if (customer is null || !BCrypt.Net.BCrypt.Verify(request.Password, customer.PasswordHash))
             return Unauthorized("Email ou mot de passe incorrect.");
+
+        // 2FA activée : on ne délivre PAS encore de JWT. On génère un jeton temporaire stocké dans Redis
+        // (expire seul après 5 min) que le client devra présenter avec son code à 6 chiffres.
+        if (customer.TwoFactorEnabled)
+        {
+            var pendingToken = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            await _redis.StorePendingLoginAsync(pendingToken, customer.Id, PendingLoginTtl);
+
+            return Ok(new LoginResponseDto(null, null, null, null, RequiresTwoFactor: true, PendingToken: pendingToken));
+        }
+
+        return Ok(BuildLoginResponse(customer));
+    }
+
+    // POST /api/auth/login-2fa — étape 2 : jeton temporaire + code TOTP
+    [HttpPost("login-2fa")]
+    public async Task<ActionResult<LoginResponseDto>> LoginTwoFactor([FromBody] LoginTwoFactorRequestDto request)
+    {
+        var customerId = await _redis.GetPendingLoginAsync(request.PendingToken);
+        if (customerId is null)
+            return BadRequest("Session expirée. Veuillez vous reconnecter.");
+
+        var customer = await _db.Customers.FindAsync(customerId.Value);
+        if (customer is null || !customer.TwoFactorEnabled || string.IsNullOrEmpty(customer.TwoFactorSecret))
+            return BadRequest("Session invalide. Veuillez vous reconnecter.");
+
+        if (!_twoFactor.VerifyCode(customer.TwoFactorSecret, request.Code))
+            return Unauthorized("Code de vérification incorrect.");
+
+        // Le jeton temporaire est à usage unique
+        await _redis.RemovePendingLoginAsync(request.PendingToken);
 
         return Ok(BuildLoginResponse(customer));
     }
@@ -97,9 +133,11 @@ public class AuthController : ControllerBase
             signingCredentials: creds
         );
 
-        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-
-        return new LoginResponseDto(tokenString, customer.Id, customer.FullName, expires);
+        return new LoginResponseDto(
+            new JwtSecurityTokenHandler().WriteToken(token),
+            customer.Id,
+            customer.FullName,
+            expires);
     }
 
     private static string GenerateFakeIban()

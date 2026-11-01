@@ -1,41 +1,36 @@
-using BankApi.Data;
+using BankApi.Integrations.Messaging;
 using BankApi.Models;
 
 namespace BankApi.Integrations.Notifications;
 
 /// <summary>
-/// Service de notifications. Crée une notification "in-app" (persistée en base, visible
-/// dans la cloche de notification du frontend) et simule en parallèle l'envoi d'un email
-/// (simplement loggé dans la console — brancher un vrai fournisseur SMTP gratuit comme
-/// Mailtrap ou Resend en mode test serait la suite logique, hors périmètre de ce squelette).
+/// Point d'entrée unique pour notifier un client : publie un événement sur RabbitMQ. Le
+/// NotificationConsumer enregistre ensuite la notification et envoie l'email en arrière-plan.
+/// La notification est "au mieux" : si RabbitMQ est indisponible, l'erreur est loggée mais
+/// l'opération bancaire déjà effectuée (ex : un virement) n'est PAS annulée ni en erreur.
 /// </summary>
 public class NotificationService
 {
-    private readonly BankDbContext _db;
+    private readonly RabbitMqPublisher _publisher;
     private readonly ILogger<NotificationService> _logger;
 
-    public NotificationService(BankDbContext db, ILogger<NotificationService> logger)
+    public NotificationService(RabbitMqPublisher publisher, ILogger<NotificationService> logger)
     {
-        _db = db;
+        _publisher = publisher;
         _logger = logger;
     }
 
-    public async Task NotifyAsync(Guid customerId, string title, string message, NotificationType type = NotificationType.Info)
+    public Task NotifyAsync(Guid customerId, string title, string message, NotificationType type = NotificationType.Info)
     {
-        var notification = new Notification
+        try
         {
-            CustomerId = customerId,
-            Title = title,
-            Message = message,
-            Type = type
-        };
+            _publisher.Publish(new BankEvent(customerId, title, message, type.ToString(), DateTime.UtcNow));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Notification '{Title}' non publiée (RabbitMQ indisponible ?) — opération conservée", title);
+        }
 
-        _db.Notifications.Add(notification);
-        await _db.SaveChangesAsync();
-
-        // --- Simulation d'envoi email (gratuit, aucun SMTP réel configuré) ---
-        _logger.LogInformation(
-            "[EMAIL SIMULÉ] Destinataire: client {CustomerId} | Sujet: {Title} | Message: {Message}",
-            customerId, title, message);
+        return Task.CompletedTask;
     }
 }

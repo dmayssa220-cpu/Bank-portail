@@ -244,6 +244,61 @@ builder.Services.Configure<BankApi.Integrations.Credit.CreditOptions>(
 
 
 // ============================================================
+// RabbitMQ (bus d'événements) + consommateur de notifications
+// ============================================================
+
+builder.Services.Configure<BankApi.Integrations.Messaging.RabbitMqOptions>(
+    builder.Configuration.GetSection(
+        BankApi.Integrations.Messaging.RabbitMqOptions.SectionName
+    )
+);
+
+builder.Services.AddSingleton<BankApi.Integrations.Messaging.RabbitMqPublisher>();
+
+builder.Services.AddSingleton<BankApi.Integrations.Messaging.RabbitMqStatus>();
+
+builder.Services.AddHostedService<BankApi.Integrations.Messaging.NotificationConsumer>();
+
+
+// ============================================================
+// Email (SMTP via MailKit — MailHog en local)
+// ============================================================
+
+builder.Services.Configure<BankApi.Integrations.Email.EmailOptions>(
+    builder.Configuration.GetSection(
+        BankApi.Integrations.Email.EmailOptions.SectionName
+    )
+);
+
+builder.Services.AddScoped<BankApi.Integrations.Email.EmailSender>();
+
+
+// ============================================================
+// Redis (cache + jetons 2FA temporaires)
+// ============================================================
+
+var redisConnectionString =
+    builder.Configuration["Redis:ConnectionString"] ?? "redis:6379";
+
+// abortConnect=false : l'API démarre même si Redis n'est pas encore prêt
+// (StackExchange.Redis se reconnecte automatiquement en arrière-plan).
+builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ =>
+    StackExchange.Redis.ConnectionMultiplexer.Connect(
+        $"{redisConnectionString},abortConnect=false"
+    )
+);
+
+builder.Services.AddSingleton<BankApi.Integrations.Caching.RedisCacheService>();
+
+
+// ============================================================
+// Double authentification (TOTP)
+// ============================================================
+
+builder.Services.AddSingleton<BankApi.Integrations.TwoFactor.TwoFactorService>();
+
+
+// ============================================================
 // CORS
 // Autoriser le frontend React
 // ============================================================
@@ -334,11 +389,18 @@ app.MapControllers();
 
 app.MapGet(
     "/health",
-    () => Results.Ok(
+    (BankApi.Integrations.Messaging.RabbitMqStatus rabbit) => Results.Ok(
         new
         {
             status = "healthy",
-            timestamp = DateTime.UtcNow
+            timestamp = DateTime.UtcNow,
+            rabbitmq = new
+            {
+                consumerConnected = rabbit.ConsumerConnected,
+                lastError = rabbit.LastError,
+                eventsProcessed = rabbit.ProcessedCount,
+                lastEventProcessedUtc = rabbit.LastEventProcessedUtc
+            }
         }
     )
 );

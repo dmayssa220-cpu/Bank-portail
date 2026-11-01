@@ -1,6 +1,7 @@
 using BankApi.Data;
 using BankApi.DTOs;
 using BankApi.Extensions;
+using BankApi.Integrations.Caching;
 using BankApi.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,11 +15,15 @@ namespace BankApi.Controllers;
 public class AccountsController : ControllerBase
 {
     private readonly BankDbContext _db;
+    private readonly RedisCacheService _cache;
 
-    public AccountsController(BankDbContext db)
+    public AccountsController(BankDbContext db, RedisCacheService cache)
     {
         _db = db;
+        _cache = cache;
     }
+
+    public static string CacheKey(Guid customerId) => $"accounts:{customerId}";
 
     // GET /api/accounts — uniquement les comptes du client authentifié
     [HttpGet]
@@ -26,11 +31,14 @@ public class AccountsController : ControllerBase
     {
         var customerId = User.GetCustomerId();
 
-        var accounts = await _db.Accounts
-            .Include(a => a.Customer)
-            .Where(a => a.CustomerId == customerId)
-            .Select(a => new AccountDto(a.Id, a.Iban, a.Balance, a.Currency, a.Customer!.FullName))
-            .ToListAsync();
+        // Cache-aside via Redis : 30 s de TTL. Invalidé explicitement après chaque virement,
+        // ouverture ou fermeture de compte pour ne jamais afficher un solde périmé.
+        var accounts = await _cache.GetOrSetAsync(CacheKey(customerId), TimeSpan.FromSeconds(30), () =>
+            _db.Accounts
+                .Include(a => a.Customer)
+                .Where(a => a.CustomerId == customerId)
+                .Select(a => new AccountDto(a.Id, a.Iban, a.Balance, a.Currency, a.Customer!.FullName))
+                .ToListAsync());
 
         return Ok(accounts);
     }
@@ -69,6 +77,7 @@ public class AccountsController : ControllerBase
 
         _db.Accounts.Add(account);
         await _db.SaveChangesAsync();
+        await _cache.RemoveAsync(CacheKey(customerId));
 
         return CreatedAtAction(nameof(GetById), new { id = account.Id },
             new AccountDto(account.Id, account.Iban, account.Balance, account.Currency, customer.FullName));
@@ -87,6 +96,7 @@ public class AccountsController : ControllerBase
 
         _db.Accounts.Remove(account);
         await _db.SaveChangesAsync();
+        await _cache.RemoveAsync(CacheKey(customerId));
 
         return NoContent();
     }

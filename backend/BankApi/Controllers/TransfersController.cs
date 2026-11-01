@@ -1,6 +1,7 @@
 using BankApi.Data;
 using BankApi.DTOs;
 using BankApi.Extensions;
+using BankApi.Integrations.Caching;
 using BankApi.Integrations.Fraud;
 using BankApi.Integrations.Notifications;
 using BankApi.Models;
@@ -18,17 +19,20 @@ public class TransfersController : ControllerBase
     private readonly BankDbContext _db;
     private readonly FraudDetectionService _fraud;
     private readonly NotificationService _notifications;
+    private readonly RedisCacheService _cache;
     private readonly ILogger<TransfersController> _logger;
 
     public TransfersController(
         BankDbContext db,
         FraudDetectionService fraud,
         NotificationService notifications,
+        RedisCacheService cache,
         ILogger<TransfersController> logger)
     {
         _db = db;
         _fraud = fraud;
         _notifications = notifications;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -100,6 +104,9 @@ public class TransfersController : ControllerBase
         _db.Transactions.Add(transaction);
         await _db.SaveChangesAsync();
         await dbTransaction.CommitAsync();
+
+        // Le solde a changé : on invalide le cache de la liste des comptes de ce client
+        await _cache.RemoveAsync(AccountsController.CacheKey(customerId));
 
         _logger.LogInformation("Virement de {Amount} effectué depuis le compte {AccountId}", request.Amount, sourceAccount.Id);
 
