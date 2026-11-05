@@ -8,9 +8,7 @@ public record LoginRequestDto(string Email, string Password);
 
 public record RegisterRequestDto(string FullName, string Email, string Password);
 
-// Réponse de connexion. Deux cas possibles :
-//  - 2FA désactivée (ou code 2FA validé) : Token/CustomerId/FullName/ExpiresAt renseignés.
-//  - 2FA activée, 1re étape : RequiresTwoFactor = true + PendingToken (valable 5 min), pas encore de Token.
+
 public record LoginResponseDto(
     string? Token,
     Guid? CustomerId,

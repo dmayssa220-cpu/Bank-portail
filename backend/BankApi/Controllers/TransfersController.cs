@@ -36,93 +36,219 @@ public class TransfersController : ControllerBase
         _logger = logger;
     }
 
-    // GET /api/transfers — historique de tous les virements sortants des comptes du client connecté
+    // GET /api/transfers — virements émis ET reçus des comptes du client connecté
     [HttpGet]
     public async Task<IActionResult> GetHistory()
     {
         var customerId = User.GetCustomerId();
 
-        var transfers = await _db.Transactions
-            .Include(t => t.Account)
-            .Where(t => t.Account!.CustomerId == customerId && t.Type == TransactionType.TransferOut)
+        var rows = await _db.Transactions
+            .Where(t => t.Account!.CustomerId == customerId
+                        && (t.Type == TransactionType.TransferOut || t.Type == TransactionType.TransferIn))
             .OrderByDescending(t => t.CreatedAt)
-            .Select(t => new
-            {
-                t.Id,
-                t.Amount,
-                t.Label,
-                t.CreatedAt,
-                fromAccountIban = t.Account!.Iban
-            })
+            .Take(100)
+            .Select(t => new { t.Id, t.Type, t.Amount, t.Label, t.CreatedAt, AccountIban = t.Account!.Iban })
             .ToListAsync();
 
-        return Ok(transfers);
+        return Ok(rows.Select(r => new
+        {
+            r.Id,
+            Type = r.Type.ToString(),
+            r.Amount,
+            r.Label,
+            r.CreatedAt,
+            r.AccountIban
+        }));
     }
 
     // POST /api/transfers
+    // En-tête optionnel "Idempotency-Key" : rejouer la même requête (double clic, nouvel essai après
+    // une coupure réseau) renvoie le résultat d'origine au lieu de débiter une seconde fois.
     [HttpPost]
-    public async Task<IActionResult> CreateTransfer([FromBody] TransferRequestDto request)
+    public async Task<IActionResult> CreateTransfer(
+        [FromBody] TransferRequestDto request,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey)
     {
         if (request.Amount <= 0)
             return BadRequest("Le montant doit être positif.");
 
+        if (decimal.Round(request.Amount, 2) != request.Amount)
+            return BadRequest("Le montant ne peut pas avoir plus de 2 décimales.");
+
+        if (string.IsNullOrWhiteSpace(request.ToIban))
+            return BadRequest("L'IBAN du bénéficiaire est obligatoire.");
+
         var customerId = User.GetCustomerId();
 
-        var sourceAccount = await _db.Accounts.FindAsync(request.FromAccountId);
-        if (sourceAccount is null)
-            return NotFound("Compte source introuvable.");
+        // --- Idempotence : la clé est préfixée par l'id du client (deux clients ne peuvent pas se télescoper) ---
+        var keyBase = string.IsNullOrWhiteSpace(idempotencyKey) ? Guid.NewGuid().ToString("N") : idempotencyKey.Trim();
+        if (keyBase.Length > 100)
+            return BadRequest("Clé d'idempotence trop longue (100 caractères maximum).");
 
-        // Vérification cruciale : on ne peut virer que depuis SON PROPRE compte
-        if (sourceAccount.CustomerId != customerId)
-            return Forbid();
+        var outKey = $"{customerId:N}:{keyBase}";
+        var inKey = $"{outKey}:in";
 
-        if (sourceAccount.Balance < request.Amount)
+        var previous = await _db.Transactions.AsNoTracking().FirstOrDefaultAsync(t => t.IdempotencyKey == outKey);
+        if (previous is not null)
+        {
+            var currentBalance = await _db.Accounts.AsNoTracking()
+                .Where(a => a.Id == previous.AccountId).Select(a => a.Balance).FirstAsync();
+            var wasInternal = await _db.Transactions.AsNoTracking().AnyAsync(t => t.IdempotencyKey == inKey);
+
+            return Ok(new TransferResultDto(previous.Id, currentBalance, wasInternal, null, Replayed: true, null));
+        }
+
+        // --- Compte source : doit appartenir au client connecté ---
+        var source = await _db.Accounts.AsNoTracking()
+            .Include(a => a.Customer)
+            .FirstOrDefaultAsync(a => a.Id == request.FromAccountId);
+
+        if (source is null) return NotFound("Compte source introuvable.");
+        if (source.CustomerId != customerId) return Forbid();
+
+        // --- Compte destinataire : interne à la banque si l'IBAN existe, sinon virement externe ---
+        var normalizedIban = new string(request.ToIban.Where(c => !char.IsWhiteSpace(c)).ToArray()).ToUpperInvariant();
+
+        var destination = await _db.Accounts.AsNoTracking()
+            .Include(a => a.Customer)
+            .FirstOrDefaultAsync(a => a.Iban.Replace(" ", "").ToUpper() == normalizedIban);
+
+        if (destination is not null)
+        {
+            if (destination.Id == source.Id)
+                return BadRequest("Le compte source et le compte bénéficiaire sont identiques.");
+
+            if (destination.Currency != source.Currency)
+                return BadRequest("Les virements entre devises différentes ne sont pas encore pris en charge.");
+        }
+
+        if (source.Balance < request.Amount)
             return BadRequest("Solde insuffisant.");
 
-        // --- Scoring de fraude AVANT le débit, sur le solde réel du compte ---
-        var fraudResult = _fraud.Score(request.Amount, DateTime.UtcNow, sourceAccount.Balance);
+        // --- Détection de fraude AVANT le débit, sur le solde réel ---
+        var fraudResult = _fraud.Score(request.Amount, DateTime.UtcNow, source.Balance);
 
         if (fraudResult.IsSuspicious)
         {
             _logger.LogWarning(
                 "Virement suspect détecté : compte {AccountId}, montant {Amount}, probabilité {Probability:P0}, raisons : {Reasons}",
-                sourceAccount.Id, request.Amount, fraudResult.Probability, string.Join(", ", fraudResult.Reasons));
+                source.Id, request.Amount, fraudResult.Probability, string.Join(", ", fraudResult.Reasons));
         }
 
+        // --- Débit + crédit atomiques ---
+        // Le débit est une mise à jour SQL conditionnelle (WHERE solde >= montant) : même avec deux virements
+        // simultanés sur le même compte, le solde ne peut jamais devenir négatif. Les deux comptes sont
+        // verrouillés toujours dans le même ordre (par id) pour éviter les interblocages (A→B et B→A en même temps).
         await using var dbTransaction = await _db.Database.BeginTransactionAsync();
 
-        sourceAccount.Balance -= request.Amount;
-
-        var transaction = new Transaction
+        bool debited;
+        if (destination is null)
         {
-            AccountId = sourceAccount.Id,
+            debited = await DebitAsync(source.Id, request.Amount);
+        }
+        else if (source.Id.CompareTo(destination.Id) < 0)
+        {
+            debited = await DebitAsync(source.Id, request.Amount);
+            if (debited) await CreditAsync(destination.Id, request.Amount);
+        }
+        else
+        {
+            await CreditAsync(destination.Id, request.Amount);
+            debited = await DebitAsync(source.Id, request.Amount);
+        }
+
+        if (!debited)
+            return BadRequest("Solde insuffisant."); // la transaction n'est pas validée : tout est annulé
+
+        var outTransaction = new Transaction
+        {
+            AccountId = source.Id,
             Type = TransactionType.TransferOut,
             Amount = request.Amount,
-            Label = request.Label ?? $"Virement vers {request.ToIban}"
+            Label = request.Label ?? $"Virement vers {request.ToIban}",
+            IdempotencyKey = outKey
         };
+        _db.Transactions.Add(outTransaction);
 
-        _db.Transactions.Add(transaction);
-        await _db.SaveChangesAsync();
-        await dbTransaction.CommitAsync();
+        if (destination is not null)
+        {
+            _db.Transactions.Add(new Transaction
+            {
+                AccountId = destination.Id,
+                Type = TransactionType.TransferIn,
+                Amount = request.Amount,
+                Label = $"Virement reçu de {MaskName(source.Customer!.FullName)}",
+                IdempotencyKey = inKey
+            });
+        }
 
-        // Le solde a changé : on invalide le cache de la liste des comptes de ce client
+        try
+        {
+            await _db.SaveChangesAsync();
+            await dbTransaction.CommitAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            // Cas typique : deux requêtes identiques (même clé d'idempotence) arrivées en même temps
+            _logger.LogWarning(ex, "Virement rejeté à l'enregistrement (clé d'idempotence déjà utilisée ?)");
+            return Conflict("Ce virement est déjà en cours de traitement.");
+        }
+
+        _logger.LogInformation("Virement de {Amount} effectué : {From} → {To}",
+            request.Amount, source.Id, destination?.Id.ToString() ?? "externe");
+
+        // --- Après validation : caches, notifications ---
+        var newBalance = await _db.Accounts.AsNoTracking()
+            .Where(a => a.Id == source.Id).Select(a => a.Balance).FirstAsync();
+
         await _cache.RemoveAsync(AccountsController.CacheKey(customerId));
-
-        _logger.LogInformation("Virement de {Amount} effectué depuis le compte {AccountId}", request.Amount, sourceAccount.Id);
+        if (destination is not null)
+            await _cache.RemoveAsync(AccountsController.CacheKey(destination.CustomerId));
 
         await _notifications.NotifyAsync(
             customerId,
             fraudResult.IsSuspicious ? "Virement signalé" : "Virement effectué",
             fraudResult.IsSuspicious
-                ? $"Votre virement de {request.Amount} vers {request.ToIban} a été effectué mais présente un profil de risque élevé. Vérifiez qu'il s'agit bien de vous."
-                : $"Un virement de {request.Amount} vers {request.ToIban} a été effectué avec succès.",
+                ? $"Votre virement de {request.Amount} {source.Currency} vers {request.ToIban} a été effectué mais présente un profil de risque élevé. Vérifiez qu'il s'agit bien de vous."
+                : $"Un virement de {request.Amount} {source.Currency} vers {request.ToIban} a été effectué avec succès.",
             fraudResult.IsSuspicious ? NotificationType.Warning : NotificationType.Success);
 
-        return Ok(new
+        if (destination is not null && destination.CustomerId != customerId)
         {
-            transactionId = transaction.Id,
-            newBalance = sourceAccount.Balance,
-            fraudAlert = fraudResult.IsSuspicious ? fraudResult : null
-        });
+            await _notifications.NotifyAsync(
+                destination.CustomerId,
+                "Virement reçu",
+                $"Vous avez reçu {request.Amount} {destination.Currency} de {MaskName(source.Customer!.FullName)} sur le compte {destination.Iban}.",
+                NotificationType.Success);
+        }
+
+        return Ok(new TransferResultDto(
+            outTransaction.Id,
+            newBalance,
+            IsInternal: destination is not null,
+            BeneficiaryName: destination is null ? null : MaskName(destination.Customer!.FullName),
+            Replayed: false,
+            FraudAlert: fraudResult.IsSuspicious ? fraudResult : null));
+    }
+
+    private async Task<bool> DebitAsync(Guid accountId, decimal amount)
+    {
+        var rows = await _db.Accounts
+            .Where(a => a.Id == accountId && a.Balance >= amount)
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.Balance, a => a.Balance - amount));
+
+        return rows == 1;
+    }
+
+    private Task<int> CreditAsync(Guid accountId, decimal amount) =>
+        _db.Accounts
+            .Where(a => a.Id == accountId)
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.Balance, a => a.Balance + amount));
+
+    // "Ahmed Ben Salah" -> "Ahmed S." : on ne révèle pas l'identité complète d'un tiers
+    private static string MaskName(string fullName)
+    {
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length <= 1 ? fullName : $"{parts[0]} {parts[^1][0]}.";
     }
 }

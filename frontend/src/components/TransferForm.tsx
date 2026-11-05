@@ -1,5 +1,11 @@
-import { useState, type FormEvent } from 'react'
-import { createTransfer, type AccountDto, type TransferResult } from '../api/client'
+import { useEffect, useState, type FormEvent } from 'react'
+import {
+  createTransfer,
+  getApiErrorMessage,
+  newIdempotencyKey,
+  type AccountDto,
+  type TransferResult
+} from '../api/client'
 
 interface Props {
   accounts: AccountDto[]
@@ -15,27 +21,44 @@ export function TransferForm({ accounts, onTransferDone }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<TransferResult | null>(null)
 
+  // Clé d'idempotence : elle reste la même tant que le formulaire n'est pas modifié. Un double clic ou
+  // un nouvel essai après une coupure réseau renvoie donc le résultat d'origine, sans second débit.
+  // Dès que l'utilisateur change un champ (ou après un succès, les champs étant vidés), une nouvelle clé est créée.
+  const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey)
+  useEffect(() => {
+    setIdempotencyKey(newIdempotencyKey())
+  }, [fromAccountId, toIban, amount, label])
+
+  // Si le compte sélectionné disparaît (fermeture), on revient sur le premier compte disponible
+  useEffect(() => {
+    if (!accounts.some((a) => a.id === fromAccountId)) {
+      setFromAccountId(accounts[0]?.id ?? '')
+    }
+  }, [accounts, fromAccountId])
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (loading) return
+
     setError(null)
     setResult(null)
 
-    const numericAmount = parseFloat(amount)
-    if (!fromAccountId || !toIban || !numericAmount || numericAmount <= 0) {
+    const numericAmount = parseFloat(amount.replace(',', '.'))
+    if (!fromAccountId || !toIban.trim() || !numericAmount || numericAmount <= 0) {
       setError('Merci de remplir tous les champs avec un montant valide.')
       return
     }
 
     setLoading(true)
     try {
-      const res = await createTransfer(fromAccountId, toIban, numericAmount, label || undefined)
+      const res = await createTransfer(fromAccountId, toIban.trim(), numericAmount, label || undefined, idempotencyKey)
       setResult(res)
       setToIban('')
       setAmount('')
       setLabel('')
       onTransferDone()
-    } catch {
-      setError("Le virement a échoué (solde insuffisant ou erreur serveur).")
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Le virement a échoué (erreur serveur). Vous pouvez réessayer sans risque de double débit.'))
     } finally {
       setLoading(false)
     }
@@ -44,6 +67,10 @@ export function TransferForm({ accounts, onTransferDone }: Props) {
   return (
     <div className="transfer-form-card">
       <h2>Nouveau virement</h2>
+      <p className="security-help">
+        Si l'IBAN appartient à un autre client de la banque, le virement est instantané et le bénéficiaire est crédité.
+        Sinon, il est traité comme un virement externe.
+      </p>
       <form onSubmit={handleSubmit} className="transfer-form">
         <label>
           Compte source
@@ -58,7 +85,7 @@ export function TransferForm({ accounts, onTransferDone }: Props) {
 
         <label>
           IBAN du bénéficiaire
-          <input value={toIban} onChange={(e) => setToIban(e.target.value)} placeholder="FR76 ..." required />
+          <input value={toIban} onChange={(e) => setToIban(e.target.value)} placeholder="TN59 1000 ... ou FR76 ..." required />
         </label>
 
         <label>
@@ -87,7 +114,17 @@ export function TransferForm({ accounts, onTransferDone }: Props) {
 
       {result && (
         <div className="transfer-result">
-          <p>✅ Virement effectué. Nouveau solde : <strong>{result.newBalance.toLocaleString('fr-FR')}</strong></p>
+          <p>
+            ✅{' '}
+            {result.replayed
+              ? 'Ce virement avait déjà été enregistré : aucun second débit.'
+              : result.isInternal
+                ? `Virement interne effectué${result.beneficiaryName ? ` vers ${result.beneficiaryName}` : ''}.`
+                : 'Virement externe effectué.'}
+          </p>
+          <p>
+            Nouveau solde du compte source : <strong>{result.newBalance.toLocaleString('fr-FR')}</strong>
+          </p>
           {result.fraudAlert && (
             <div className="fraud-alert">
               ⚠️ Opération signalée comme potentiellement à risque ({(result.fraudAlert.probability * 100).toFixed(0)}%) :

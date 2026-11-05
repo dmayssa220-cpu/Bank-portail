@@ -70,6 +70,9 @@ export interface FraudScoreResult {
 export interface TransferResult {
   transactionId: string
   newBalance: number
+  isInternal: boolean
+  beneficiaryName: string | null
+  replayed: boolean
   fraudAlert: FraudScoreResult | null
 }
 
@@ -104,24 +107,89 @@ export const deleteAccount = async (accountId: string): Promise<void> => {
   await apiClient.delete(`/accounts/${accountId}`)
 }
 
-export const getAccountTransactions = async (accountId: string): Promise<TransactionDto[]> => {
-  const { data } = await apiClient.get<TransactionDto[]>(`/accounts/${accountId}/transactions`)
+export interface TransactionFilters {
+  type?: string
+  from?: string
+  to?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface PagedResult<T> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+// N'envoie pas les filtres vides au serveur
+const cleanParams = (filters: TransactionFilters) =>
+  Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== '' && v !== undefined))
+
+export const getAccount = async (accountId: string): Promise<AccountDto> => {
+  const { data } = await apiClient.get<AccountDto>(`/accounts/${accountId}`)
   return data
 }
 
+export const getAccountTransactions = async (
+  accountId: string,
+  filters: TransactionFilters = {}
+): Promise<PagedResult<TransactionDto>> => {
+  const { data } = await apiClient.get<PagedResult<TransactionDto>>(`/accounts/${accountId}/transactions`, {
+    params: cleanParams(filters)
+  })
+  return data
+}
+
+export const depositToAccount = async (accountId: string, amount: number, label?: string): Promise<number> => {
+  const { data } = await apiClient.post<{ newBalance: number }>(`/accounts/${accountId}/deposit`, { amount, label })
+  return data.newBalance
+}
+
+// Téléchargement du relevé CSV : on passe par axios (et non un simple lien) pour envoyer le jeton JWT
+export const downloadTransactionsCsv = async (accountId: string, filters: TransactionFilters = {}): Promise<void> => {
+  const { page, pageSize, ...exportFilters } = filters
+  void page
+  void pageSize
+
+  const response = await apiClient.get(`/accounts/${accountId}/transactions/export`, {
+    params: cleanParams(exportFilters),
+    responseType: 'blob'
+  })
+
+  const disposition = response.headers['content-disposition'] as string | undefined
+  const match = disposition?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
+  const fileName = match ? decodeURIComponent(match[1]) : 'releve.csv'
+
+  const url = URL.createObjectURL(response.data as Blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 // --- Virements ---
+// Clé unique par tentative de virement : rejouer la même clé ne débite jamais deux fois
+export const newIdempotencyKey = (): string =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`
+
 export const createTransfer = async (
   fromAccountId: string,
   toIban: string,
   amount: number,
-  label?: string
+  label?: string,
+  idempotencyKey?: string
 ): Promise<TransferResult> => {
-  const { data } = await apiClient.post<TransferResult>('/transfers', {
-    fromAccountId,
-    toIban,
-    amount,
-    label
-  })
+  const { data } = await apiClient.post<TransferResult>(
+    '/transfers',
+    { fromAccountId, toIban, amount, label },
+    idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined
+  )
   return data
 }
 
@@ -240,10 +308,11 @@ export const markAllNotificationsAsRead = async (): Promise<void> => {
 // --- Historique des virements ---
 export interface TransferHistoryItem {
   id: string
+  type: 'TransferOut' | 'TransferIn' | string
   amount: number
   label: string
   createdAt: string
-  fromAccountIban: string
+  accountIban: string
 }
 
 export const getTransferHistory = async (): Promise<TransferHistoryItem[]> => {
@@ -289,4 +358,12 @@ export const confirmTwoFactor = async (code: string): Promise<void> => {
 
 export const disableTwoFactor = async (password: string): Promise<void> => {
   await apiClient.post('/profile/2fa/disable', { password })
+}
+
+// Extrait le message d'erreur texte renvoyé par l'API (ex : "Solde insuffisant."), sinon un message par défaut
+export const getApiErrorMessage = (err: unknown, fallback: string): string => {
+  if (axios.isAxiosError(err) && typeof err.response?.data === 'string' && err.response.data.trim()) {
+    return err.response.data
+  }
+  return fallback
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { createAccount, deleteAccount, type AccountDto } from '../api/client'
+import { Link } from 'react-router-dom'
+import { createAccount, deleteAccount, depositToAccount, getApiErrorMessage, type AccountDto } from '../api/client'
 
 interface Props {
   accounts: AccountDto[]
@@ -31,6 +32,21 @@ export function AccountList({ accounts, loading, error, onChanged }: Props) {
     }
   }
 
+  const handleDeposit = async (acc: AccountDto) => {
+    const value = prompt(`Montant à déposer sur ${acc.iban} (simulation, 10 000 maximum) :`, '500')
+    if (!value) return
+
+    const amount = parseFloat(value.replace(',', '.'))
+    if (!amount || amount <= 0) return
+
+    try {
+      await depositToAccount(acc.id, amount)
+      onChanged()
+    } catch (err) {
+      alert(getApiErrorMessage(err, 'Dépôt impossible.'))
+    }
+  }
+
   if (loading) return <div className="spinner" />
   if (error) return <p className="error">{error}</p>
 
@@ -46,11 +62,15 @@ export function AccountList({ accounts, loading, error, onChanged }: Props) {
           <div className="account-card__balance">
             {acc.balance.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} {acc.currency}
           </div>
-          {acc.balance === 0 && (
-            <button className="account-card__close" onClick={() => handleDelete(acc.id)}>
-              Fermer ce compte
-            </button>
-          )}
+          <div className="account-card__actions">
+            <Link className="btn-outline" to={`/accounts/${acc.id}`}>Voir les opérations</Link>
+            <button className="btn-outline" onClick={() => handleDeposit(acc)}>Déposer (démo)</button>
+            {acc.balance === 0 && (
+              <button className="btn-outline btn-outline--danger" onClick={() => handleDelete(acc.id)}>
+                Fermer ce compte
+              </button>
+            )}
+          </div>
         </div>
       ))}
       <button className="account-list__add" onClick={handleCreate} disabled={creating}>

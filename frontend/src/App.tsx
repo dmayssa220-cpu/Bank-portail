@@ -5,6 +5,7 @@ import { Register } from './pages/Register'
 import { Credit } from './pages/Credit'
 import { Cards } from './pages/Cards'
 import { Profile } from './pages/Profile'
+import { AccountDetails } from './pages/AccountDetails'
 import { ChatWidget } from './components/ChatWidget'
 import { NotificationBell } from './components/NotificationBell'
 import { ProtectedRoute } from './auth/ProtectedRoute'
@@ -48,6 +49,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/accounts/:id"
+          element={
+            <ProtectedRoute>
+              <AccountDetails />
             </ProtectedRoute>
           }
         />

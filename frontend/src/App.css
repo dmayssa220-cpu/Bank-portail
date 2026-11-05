@@ -590,3 +590,131 @@
   background: #f2f4f7;
   color: #667085;
 }
+
+
+/* --- Détail d'un compte : actions, filtres, tableau, pagination --- */
+.account-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.btn-outline {
+  display: inline-block;
+  background: white;
+  border: 1px solid #d0d5dd;
+  color: #344054;
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.82rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.btn-outline--danger {
+  color: #d92d20;
+  border-color: #fda29b;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: #475467;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.back-link:hover {
+  color: #0b2545;
+}
+
+.account-card--hero {
+  margin-bottom: 1.5rem;
+}
+
+.tx-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.tx-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: #475467;
+}
+
+.tx-filters select,
+.tx-filters input {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.tx-table-wrapper {
+  overflow-x: auto;
+}
+
+.tx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.tx-table th {
+  text-align: left;
+  color: #667085;
+  font-weight: 500;
+  font-size: 0.78rem;
+  padding: 0.5rem 0.4rem;
+  border-bottom: 1px solid #eef1f6;
+}
+
+.tx-table td {
+  padding: 0.6rem 0.4rem;
+  border-bottom: 1px solid #f2f4f7;
+}
+
+.tx-table__amount {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.tx-badge {
+  background: #eef1f6;
+  color: #344054;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.amount--credit {
+  color: #067647;
+  font-weight: 700;
+}
+
+.amount--debit {
+  color: #d92d20;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.82rem;
+  color: #667085;
+}
